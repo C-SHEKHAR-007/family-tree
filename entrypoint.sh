@@ -5,7 +5,7 @@ echo "Waiting for database..."
 sleep 5
 
 echo "Running migrations..."
-alembic upgrade head
+alembic upgrade head || exit 1
 
 echo "Starting FastAPI server..."
 
