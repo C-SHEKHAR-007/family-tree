@@ -7,6 +7,9 @@ sleep 5
 echo "Running migrations..."
 alembic upgrade head || exit 1
 
+echo "Running tests..."
+pytest || exit 1
+
 echo "Starting FastAPI server..."
 
 uvicorn app.main:app --host 0.0.0.0 --port 8000

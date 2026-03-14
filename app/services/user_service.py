@@ -9,7 +9,7 @@ def register_user(db: Session, user_input):
     if existing_user:
         raise Exception("Email already registered")
 
-    user_data = user_input.dict()
+    user_data = user_input.model_dump()
     user_data["password_hash"] = hash_password(user_data.pop("password"))
 
     return user_repo.create_user(db, user_data)
