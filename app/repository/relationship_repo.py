@@ -179,3 +179,37 @@ def get_all_relationships(db: Session, skip: int = 0, limit: int = 100) -> List[
         List of Relationship objects
     """
     return db.query(Relationship).offset(skip).limit(limit).all()
+
+
+def get_relationship_by_id_and_tree(db: Session, relationship_id: UUID, tree_id: UUID) -> Optional[Relationship]:
+    """
+    Retrieve a relationship by ID, only if it belongs to the specified tree.
+    
+    Args:
+        db: Database session
+        relationship_id: UUID of the relationship
+        tree_id: UUID of the tree
+        
+    Returns:
+        Relationship object if found and belongs to tree, None otherwise
+    """
+    return db.query(Relationship).filter(
+        Relationship.id == relationship_id,
+        Relationship.tree_id == tree_id
+    ).first()
+
+
+def get_relationships_by_tree(db: Session, tree_id: UUID, skip: int = 0, limit: int = 100) -> List[Relationship]:
+    """
+    Get all relationships belonging to a specific tree.
+    
+    Args:
+        db: Database session
+        tree_id: UUID of the tree
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+        
+    Returns:
+        List of Relationship objects belonging to the tree
+    """
+    return db.query(Relationship).filter(Relationship.tree_id == tree_id).offset(skip).limit(limit).all()

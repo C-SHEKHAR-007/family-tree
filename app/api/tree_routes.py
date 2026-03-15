@@ -36,11 +36,12 @@ def get_ancestors(
     current_user: User = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """
-    Get all ancestors of a person.
+    Get all ancestors of a person within the current user's tree.
     
     Returns parents, grandparents, great-grandparents, etc.
     
-    Requires authentication.
+    SUPER_ADMIN can access any person's ancestors.
+    Other users can only access persons in their own tree.
     
     Args:
         person_id: UUID of the person
@@ -52,10 +53,11 @@ def get_ancestors(
         List of ancestor records with generation level
         
     Raises:
-        HTTPException: 404 if person not found
+        HTTPException: 404 if person not found or not in user's tree
     """
     try:
-        return tree_service.get_ancestors(db, person_id, max_depth)
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        return tree_service.get_ancestors(db, person_id, max_depth, tree_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -68,11 +70,12 @@ def get_descendants(
     current_user: User = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """
-    Get all descendants of a person.
+    Get all descendants of a person within the current user's tree.
     
     Returns children, grandchildren, great-grandchildren, etc.
     
-    Requires authentication.
+    SUPER_ADMIN can access any person's descendants.
+    Other users can only access persons in their own tree.
     
     Args:
         person_id: UUID of the person
@@ -84,10 +87,11 @@ def get_descendants(
         List of descendant records with generation level
         
     Raises:
-        HTTPException: 404 if person not found
+        HTTPException: 404 if person not found or not in user's tree
     """
     try:
-        return tree_service.get_descendants(db, person_id, max_depth)
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        return tree_service.get_descendants(db, person_id, max_depth, tree_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -99,11 +103,12 @@ def get_siblings(
     current_user: User = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """
-    Get all siblings of a person.
+    Get all siblings of a person within the current user's tree.
     
     Derived from shared parents or direct sibling relationships.
     
-    Requires authentication.
+    SUPER_ADMIN can access any person's siblings.
+    Other users can only access persons in their own tree.
     
     Args:
         person_id: UUID of the person
@@ -114,10 +119,11 @@ def get_siblings(
         List of sibling records
         
     Raises:
-        HTTPException: 404 if person not found
+        HTTPException: 404 if person not found or not in user's tree
     """
     try:
-        return tree_service.get_siblings(db, person_id)
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        return tree_service.get_siblings(db, person_id, tree_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -130,12 +136,13 @@ def get_full_tree(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
-    Build a complete family tree starting from a person.
+    Build a complete family tree starting from a person in the current user's tree.
     
     Returns a nested structure with the person, their spouse,
     and children (recursively up to specified depth).
     
-    Requires authentication.
+    SUPER_ADMIN can access any person's tree.
+    Other users can only access persons in their own tree.
     
     Args:
         person_id: UUID of the root person
@@ -147,14 +154,15 @@ def get_full_tree(
         Nested family tree structure
         
     Raises:
-        HTTPException: 404 if person not found
+        HTTPException: 404 if person not found or not in user's tree
     """
     try:
-        tree = tree_service.build_family_tree(db, person_id, depth)
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        tree = tree_service.build_family_tree(db, person_id, depth, tree_id)
         if tree is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Person with id {person_id} not found"
+                detail=f"Person with id {person_id} not found in your tree"
             )
         return tree
     except ValueError as e:
@@ -168,12 +176,13 @@ def get_tree_statistics(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
-    Get statistics about a family tree.
+    Get statistics about a family tree within the current user's tree.
     
     Returns counts of ancestors, descendants, siblings,
     and generation depths.
     
-    Requires authentication.
+    SUPER_ADMIN can access any person's statistics.
+    Other users can only access persons in their own tree.
     
     Args:
         person_id: UUID of the root person
@@ -184,9 +193,10 @@ def get_tree_statistics(
         Dictionary with tree statistics
         
     Raises:
-        HTTPException: 404 if person not found
+        HTTPException: 404 if person not found or not in user's tree
     """
     try:
-        return tree_service.get_tree_statistics(db, person_id)
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        return tree_service.get_tree_statistics(db, person_id, tree_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

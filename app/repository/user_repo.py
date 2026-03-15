@@ -134,3 +134,34 @@ def delete_user(db: Session, user_id: UUID) -> bool:
         db.commit()
         return True
     return False
+
+
+def get_users_by_tree(db: Session, tree_id: UUID, skip: int = 0, limit: int = 100) -> List[User]:
+    """
+    Retrieve all users belonging to a specific tree.
+    
+    Args:
+        db: Database session
+        tree_id: UUID of the tree
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+        
+    Returns:
+        List of User objects belonging to the tree
+    """
+    return db.query(User).filter(User.tree_id == tree_id).offset(skip).limit(limit).all()
+
+
+def get_all_users_with_roles(db: Session, skip: int = 0, limit: int = 100) -> List[User]:
+    """
+    Retrieve all users with their roles (for SUPER_ADMIN).
+    
+    Args:
+        db: Database session
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+        
+    Returns:
+        List of all User objects
+    """
+    return db.query(User).offset(skip).limit(limit).all()

@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_user, admin_required
+from app.core.security import get_current_user, admin_required, member_or_admin_required
 from app.models.user import User
 from app.schemas.relationship_schema import (
     RelationshipCreate,
@@ -37,31 +37,42 @@ router = APIRouter(prefix="/relationships", tags=["Relationships"])
 def create_relationship(
     relationship_data: RelationshipCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(member_or_admin_required),
 ):
     """
-    Create a family relationship between two persons.
+    Create a family relationship between two persons in the current user's tree.
     
     Automatically creates inverse relationships where applicable:
     - FATHER/MOTHER creates CHILD relationship
     - SPOUSE creates SPOUSE relationship  
     - SIBLING creates SIBLING relationship
     
-    Requires authentication.
+    Requires member or admin role. Viewers have read-only access.
+    Users can only create relationships within their own tree.
     
     Args:
         relationship_data: Relationship creation data
         db: Database session
-        current_user: Authenticated user
+        current_user: Authenticated user (member or admin)
         
     Returns:
         Created relationship object
         
     Raises:
-        HTTPException: 400 if validation fails
+        HTTPException: 400 if validation fails or persons not in user's tree
+        HTTPException: 403 if user has no tree assigned
     """
+    # SUPER_ADMIN can create relationships in any tree
+    tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+    
+    if tree_id is None and current_user.role != "SUPER_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be assigned to a tree to create relationships"
+        )
+    
     try:
-        return relationship_service.create_relationship(db, relationship_data)
+        return relationship_service.create_relationship(db, relationship_data, tree_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -74,9 +85,10 @@ def get_all_relationships(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get all relationships with pagination.
+    Get all relationships in the current user's tree with pagination.
     
-    Requires authentication.
+    SUPER_ADMIN can see all relationships across all trees.
+    Other users only see relationships in their own tree.
     
     Args:
         skip: Number of records to skip
@@ -87,7 +99,11 @@ def get_all_relationships(
     Returns:
         List of relationship objects
     """
-    return relationship_service.get_all_relationships(db, skip, limit)
+    # SUPER_ADMIN can see all relationships
+    if current_user.role == "SUPER_ADMIN":
+        return relationship_service.get_all_relationships(db, skip, limit)
+    
+    return relationship_service.get_all_relationships(db, skip, limit, current_user.tree_id)
 
 
 @router.get("/{relationship_id}", response_model=RelationshipResponse)
@@ -97,9 +113,10 @@ def get_relationship(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get a relationship by ID.
+    Get a relationship by ID within the current user's tree.
     
-    Requires authentication.
+    SUPER_ADMIN can access any relationship.
+    Other users can only access relationships in their own tree.
     
     Args:
         relationship_id: UUID of the relationship
@@ -110,10 +127,11 @@ def get_relationship(
         Relationship object
         
     Raises:
-        HTTPException: 404 if relationship not found
+        HTTPException: 404 if relationship not found or not in user's tree
     """
     try:
-        return relationship_service.get_relationship_by_id(db, relationship_id)
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        return relationship_service.get_relationship_by_id(db, relationship_id, tree_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -125,9 +143,10 @@ def get_person_relationships(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get all relationships for a specific person.
+    Get all relationships for a specific person in the current user's tree.
     
-    Requires authentication.
+    SUPER_ADMIN can access relationships for any person.
+    Other users can only access relationships for persons in their own tree.
     
     Args:
         person_id: UUID of the person
@@ -138,10 +157,11 @@ def get_person_relationships(
         List of relationship objects
         
     Raises:
-        HTTPException: 404 if person not found
+        HTTPException: 404 if person not found or not in user's tree
     """
     try:
-        return relationship_service.get_relationships_for_person(db, person_id)
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        return relationship_service.get_relationships_for_person(db, person_id, tree_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -153,7 +173,7 @@ def get_family_tree(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get organized family relationships for a person.
+    Get organized family relationships for a person in the current user's tree.
     
     Returns a structured view of:
     - Father, Mother
@@ -161,7 +181,8 @@ def get_family_tree(
     - Children
     - Siblings
     
-    Requires authentication.
+    SUPER_ADMIN can access any person's family relationships.
+    Other users can only access persons in their own tree.
     
     Args:
         person_id: UUID of the person
@@ -172,10 +193,11 @@ def get_family_tree(
         FamilyRelationships object with categorized relations
         
     Raises:
-        HTTPException: 404 if person not found
+        HTTPException: 404 if person not found or not in user's tree
     """
     try:
-        return relationship_service.get_family_relationships(db, person_id)
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        return relationship_service.get_family_relationships(db, person_id, tree_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -187,9 +209,11 @@ def delete_relationship(
     current_user: User = Depends(admin_required),
 ):
     """
-    Delete a relationship.
+    Delete a relationship within the current user's tree.
     
-    Requires admin role.
+    Requires admin role (SUPER_ADMIN or FAMILY_ADMIN).
+    SUPER_ADMIN can delete any relationship.
+    FAMILY_ADMIN can only delete relationships in their tree.
     
     Args:
         relationship_id: UUID of the relationship to delete
@@ -197,10 +221,11 @@ def delete_relationship(
         current_user: Authenticated admin user
         
     Raises:
-        HTTPException: 404 if relationship not found
+        HTTPException: 404 if relationship not found or not in user's tree
     """
     try:
-        relationship_service.delete_relationship(db, relationship_id)
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        relationship_service.delete_relationship(db, relationship_id, tree_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -213,16 +238,25 @@ def delete_relationships_between_persons(
     current_user: User = Depends(admin_required),
 ):
     """
-    Delete all relationships between two persons.
+    Delete all relationships between two persons in the current user's tree.
     
-    Requires admin role.
+    Requires admin role (SUPER_ADMIN or FAMILY_ADMIN).
+    SUPER_ADMIN can delete relationships between any persons.
+    FAMILY_ADMIN can only delete relationships in their tree.
     
     Args:
         person_id: UUID of the first person
         related_person_id: UUID of the second person
         db: Database session
         current_user: Authenticated admin user
+        
+    Raises:
+        HTTPException: 404 if persons not found or not in user's tree
     """
-    relationship_service.delete_relationships_between_persons(
-        db, person_id, related_person_id
-    )
+    try:
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        relationship_service.delete_relationships_between_persons(
+            db, person_id, related_person_id, tree_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

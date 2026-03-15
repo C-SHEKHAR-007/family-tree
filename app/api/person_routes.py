@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_user, admin_required
+from app.core.security import get_current_user, admin_required, member_or_admin_required
 from app.models.user import User
 from app.schemas.person_schema import (
     PersonCreate,
@@ -37,22 +37,28 @@ router = APIRouter(prefix="/persons", tags=["Persons"])
 def create_person(
     person_data: PersonCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(member_or_admin_required),
 ):
     """
-    Create a new person.
+    Create a new person in the current user's tree.
     
-    Requires authentication.
+    Requires member or admin role. Viewers have read-only access.
+    Person is automatically assigned to the current user's tree.
     
     Args:
         person_data: Person creation data
         db: Database session
-        current_user: Authenticated user
+        current_user: Authenticated user (member or admin)
         
     Returns:
         Created person object
     """
-    return person_service.create_person(db, person_data)
+    if not current_user.tree_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You don't have a family tree. Please contact support."
+        )
+    return person_service.create_person(db, person_data, current_user.tree_id)
 
 
 @router.get("/", response_model=List[PersonResponse])
@@ -63,9 +69,10 @@ def get_all_persons(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get all persons with pagination.
+    Get all persons in the current user's tree with pagination.
     
-    Requires authentication.
+    SUPER_ADMIN can see all persons across all trees.
+    Other users only see persons in their own tree.
     
     Args:
         skip: Number of records to skip
@@ -76,7 +83,12 @@ def get_all_persons(
     Returns:
         List of person objects
     """
-    return person_service.get_all_persons(db, skip, limit)
+    # SUPER_ADMIN can see all persons
+    if current_user.role == "SUPER_ADMIN":
+        return person_service.get_all_persons(db, skip, limit)
+    
+    # Others see only their tree's persons
+    return person_service.get_all_persons(db, skip, limit, current_user.tree_id)
 
 
 @router.get("/search", response_model=List[PersonResponse])
@@ -90,9 +102,10 @@ def search_persons(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Search persons with filters.
+    Search persons with filters within the current user's tree.
     
-    Requires authentication.
+    SUPER_ADMIN can search across all trees.
+    Other users only search within their own tree.
     
     Args:
         first_name: Optional first name filter
@@ -106,8 +119,10 @@ def search_persons(
     Returns:
         List of matching person objects
     """
+    # SUPER_ADMIN can search all trees
+    tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
     return person_service.search_persons(
-        db, first_name, last_name, gender, skip, limit
+        db, first_name, last_name, gender, skip, limit, tree_id
     )
 
 
@@ -118,9 +133,10 @@ def get_person(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get a person by ID.
+    Get a person by ID within the current user's tree.
     
-    Requires authentication.
+    SUPER_ADMIN can access any person.
+    Other users can only access persons in their own tree.
     
     Args:
         person_id: UUID of the person
@@ -131,10 +147,12 @@ def get_person(
         Person object
         
     Raises:
-        HTTPException: 404 if person not found
+        HTTPException: 404 if person not found or not in user's tree
     """
     try:
-        return person_service.get_person_by_id(db, person_id)
+        # SUPER_ADMIN can access any person
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        return person_service.get_person_by_id(db, person_id, tree_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -144,27 +162,30 @@ def update_person(
     person_id: UUID,
     person_data: PersonUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(member_or_admin_required),
 ):
     """
-    Update a person.
+    Update a person within the current user's tree.
     
-    Requires authentication.
+    Requires member or admin role. Viewers have read-only access.
+    Users can only update persons in their own tree.
     
     Args:
         person_id: UUID of the person to update
         person_data: Fields to update
         db: Database session
-        current_user: Authenticated user
+        current_user: Authenticated user (member or admin)
         
     Returns:
         Updated person object
         
     Raises:
-        HTTPException: 404 if person not found
+        HTTPException: 404 if person not found or not in user's tree
     """
     try:
-        return person_service.update_person(db, person_id, person_data)
+        # Verify person belongs to user's tree (SUPER_ADMIN can update any)
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        return person_service.update_person(db, person_id, person_data, tree_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -176,9 +197,11 @@ def delete_person(
     current_user: User = Depends(admin_required),
 ):
     """
-    Delete a person.
+    Delete a person within the current user's tree.
     
-    Requires admin role.
+    Requires admin role (SUPER_ADMIN or FAMILY_ADMIN).
+    Admins can only delete persons in their own tree.
+    SUPER_ADMIN can delete persons from any tree.
     
     Args:
         person_id: UUID of the person to delete
@@ -186,9 +209,11 @@ def delete_person(
         current_user: Authenticated admin user
         
     Raises:
-        HTTPException: 404 if person not found
+        HTTPException: 404 if person not found or not in user's tree
     """
     try:
-        person_service.delete_person(db, person_id)
+        # SUPER_ADMIN can delete any person
+        tree_id = None if current_user.role == "SUPER_ADMIN" else current_user.tree_id
+        person_service.delete_person(db, person_id, tree_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

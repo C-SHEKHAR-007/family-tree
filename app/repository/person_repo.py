@@ -67,6 +67,40 @@ def get_all_persons(db: Session, skip: int = 0, limit: int = 100) -> List[Person
     return db.query(Person).offset(skip).limit(limit).all()
 
 
+def get_persons_by_tree(db: Session, tree_id: UUID, skip: int = 0, limit: int = 100) -> List[Person]:
+    """
+    Retrieve all persons belonging to a specific tree.
+    
+    Args:
+        db: Database session
+        tree_id: UUID of the tree
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+        
+    Returns:
+        List of Person objects belonging to the tree
+    """
+    return db.query(Person).filter(Person.tree_id == tree_id).offset(skip).limit(limit).all()
+
+
+def get_person_by_id_and_tree(db: Session, person_id: UUID, tree_id: UUID) -> Optional[Person]:
+    """
+    Retrieve a person by ID, only if they belong to the specified tree.
+    
+    Args:
+        db: Database session
+        person_id: UUID of the person
+        tree_id: UUID of the tree
+        
+    Returns:
+        Person object if found and belongs to tree, None otherwise
+    """
+    return db.query(Person).filter(
+        Person.id == person_id,
+        Person.tree_id == tree_id
+    ).first()
+
+
 def update_person(db: Session, person_id: UUID, person_data: dict) -> Optional[Person]:
     """
     Update an existing person.
@@ -114,10 +148,11 @@ def search_persons(
     last_name: Optional[str] = None,
     gender: Optional[str] = None,
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100,
+    tree_id: Optional[UUID] = None
 ) -> List[Person]:
     """
-    Search persons with filters.
+    Search persons with filters within a tree.
     
     Args:
         db: Database session
@@ -126,11 +161,16 @@ def search_persons(
         gender: Optional gender filter
         skip: Number of records to skip
         limit: Maximum number of records to return
+        tree_id: Optional UUID of the tree to filter by
         
     Returns:
         List of matching Person objects
     """
     query = db.query(Person)
+    
+    # Filter by tree if specified
+    if tree_id:
+        query = query.filter(Person.tree_id == tree_id)
     
     if first_name:
         query = query.filter(Person.first_name.ilike(f"%{first_name}%"))

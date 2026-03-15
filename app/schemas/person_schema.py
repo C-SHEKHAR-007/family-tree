@@ -60,6 +60,7 @@ class PersonResponse(BaseModel):
     mobile: Optional[str] = None
     email: Optional[str] = None
     birth_place: Optional[str] = None
+    tree_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 

@@ -179,18 +179,18 @@ def test_delete_occupation_requires_auth(client, auth_headers):
     assert response.status_code == 401
 
 
-def test_delete_occupation_success(client, auth_headers):
-    """DELETE /occupations/{id} returns 204."""
+def test_delete_occupation_success(client, admin_headers):
+    """DELETE /occupations/{id} returns 204 for admin."""
     p = client.post(
         "/persons/",
         json={"first_name": "P", "last_name": "P", "gender": "MALE"},
-        headers=auth_headers,
+        headers=admin_headers,
     )
     create = client.post(
         "/occupations/",
         json={"person_id": str(p.json()["id"]), "title": "Engineer"},
-        headers=auth_headers,
+        headers=admin_headers,
     )
     occ_id = create.json()["id"]
-    response = client.delete(f"/occupations/{occ_id}", headers=auth_headers)
+    response = client.delete(f"/occupations/{occ_id}", headers=admin_headers)
     assert response.status_code == 204

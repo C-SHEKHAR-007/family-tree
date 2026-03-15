@@ -186,9 +186,31 @@ def admin_required(current_user = Depends(get_current_user)):
     Raises:
         HTTPException: 403 if user is not admin
     """
-    if current_user.role not in ["admin", "SUPER_ADMIN"]:
+    if current_user.role not in ["admin", "SUPER_ADMIN", "FAMILY_ADMIN"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
+        )
+    return current_user
+
+
+def member_or_admin_required(current_user = Depends(get_current_user)):
+    """
+    Dependency to ensure the current user has member or admin role.
+    Viewers are blocked from write operations.
+    
+    Args:
+        current_user: User object from get_current_user
+        
+    Returns:
+        User object if member or admin
+        
+    Raises:
+        HTTPException: 403 if user is viewer (read-only)
+    """
+    if current_user.role == "viewer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Viewers have read-only access. Write operations not permitted."
         )
     return current_user

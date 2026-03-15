@@ -29,7 +29,8 @@ from app.core.security import (
     hash_password,
     get_current_user,
 )
-from app.repository.user_repo import get_user_by_email, create_user, get_user_by_username
+from app.repository.user_repo import get_user_by_email, create_user, get_user_by_username, update_user
+from app.repository.family_tree_repo import create_tree
 from app.schemas.auth_schema import Token, UserRegister, UserProfile
 from app.models.user import User
 
@@ -85,7 +86,12 @@ def register(
     db: Session = Depends(get_db),
 ):
     """
-    Register a new user account.
+    Register a new user account and create a family tree.
+    
+    When a user registers:
+    1. A new FamilyTree is created with the user as owner
+    2. User is assigned FAMILY_ADMIN role
+    3. User is associated with the new tree
     
     Args:
         user_data: User registration data
@@ -113,12 +119,27 @@ def register(
             detail="Username already taken"
         )
     
-    # Create user with hashed password
-    user_dict = user_data.model_dump()
+    # Create user with hashed password - initially without tree_id
+    user_dict = user_data.model_dump(exclude={"tree_name"})
     user_dict["password_hash"] = hash_password(user_dict.pop("password"))
-    user_dict["role"] = "member"  # Default role for new users
+    user_dict["role"] = "FAMILY_ADMIN"  # New registrants become FAMILY_ADMIN of their tree
     
     new_user = create_user(db, user_dict)
+    
+    # Create a family tree for the user
+    tree_name = user_data.tree_name or f"{user_data.last_name} Family Tree"
+    tree_data = {
+        "name": tree_name,
+        "description": f"Family tree created by {user_data.first_name} {user_data.last_name}",
+        "owner_id": new_user.id,
+    }
+    new_tree = create_tree(db, tree_data)
+    
+    # Update user with tree_id
+    update_user(db, new_user.id, {"tree_id": new_tree.id})
+    
+    # Refresh user to get updated tree_id
+    db.refresh(new_user)
     
     return new_user
 

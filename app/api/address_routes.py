@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_active_user
+from app.core.security import get_current_active_user, member_or_admin_required, admin_required
 from app.models.user import User
 from app.schemas.address_schema import AddressCreate, AddressUpdate, AddressResponse
 from app.services import address_service
@@ -33,12 +33,12 @@ router = APIRouter(prefix="/addresses", tags=["Addresses"])
 def create_address(
     address_data: AddressCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(member_or_admin_required)
 ):
     """
     Create a new address for a person.
     
-    Requires authentication.
+    Requires member or admin role. Viewers have read-only access.
     """
     try:
         address = address_service.create_address(db, address_data)
@@ -88,12 +88,12 @@ def update_address(
     address_id: UUID,
     address_data: AddressUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(member_or_admin_required)
 ):
     """
     Update an existing address.
     
-    Requires authentication.
+    Requires member or admin role. Viewers have read-only access.
     """
     try:
         address = address_service.update_address(db, address_id, address_data)
@@ -106,12 +106,12 @@ def update_address(
 def delete_address(
     address_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(admin_required)
 ):
     """
     Delete an address.
     
-    Requires authentication.
+    Requires admin role.
     """
     try:
         address_service.delete_address(db, address_id)

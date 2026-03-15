@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_active_user
+from app.core.security import get_current_active_user, member_or_admin_required, admin_required
 from app.models.user import User
 from app.schemas.occupation_schema import OccupationCreate, OccupationUpdate, OccupationResponse
 from app.services import occupation_service
@@ -33,12 +33,12 @@ router = APIRouter(prefix="/occupations", tags=["Occupations"])
 def create_occupation(
     occupation_data: OccupationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(member_or_admin_required)
 ):
     """
     Create a new occupation for a person.
     
-    Requires authentication.
+    Requires member or admin role. Viewers have read-only access.
     """
     try:
         occupation = occupation_service.create_occupation(db, occupation_data)
@@ -88,12 +88,12 @@ def update_occupation(
     occupation_id: UUID,
     occupation_data: OccupationUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(member_or_admin_required)
 ):
     """
     Update an existing occupation.
     
-    Requires authentication.
+    Requires member or admin role. Viewers have read-only access.
     """
     try:
         occupation = occupation_service.update_occupation(db, occupation_id, occupation_data)
@@ -106,12 +106,12 @@ def update_occupation(
 def delete_occupation(
     occupation_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(admin_required)
 ):
     """
     Delete an occupation.
     
-    Requires authentication.
+    Requires admin role.
     """
     try:
         occupation_service.delete_occupation(db, occupation_id)

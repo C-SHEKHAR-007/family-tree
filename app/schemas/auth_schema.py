@@ -41,6 +41,7 @@ class UserRegister(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     mobile: Optional[str] = Field(None, max_length=20)
     password: str = Field(..., min_length=8, description="Minimum 8 characters")
+    tree_name: Optional[str] = Field(None, max_length=255, description="Name for your family tree")
 
 
 class UserProfile(BaseModel):
@@ -52,6 +53,7 @@ class UserProfile(BaseModel):
     username: str
     mobile: Optional[str]
     role: str
+    tree_id: Optional[UUID] = None
     person_id: Optional[UUID] = None
     family_root_id: Optional[UUID] = None
     created_at: datetime

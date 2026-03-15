@@ -184,18 +184,18 @@ def test_delete_address_requires_auth(client, auth_headers):
     assert response.status_code == 401
 
 
-def test_delete_address_success(client, auth_headers):
-    """DELETE /addresses/{id} returns 204."""
+def test_delete_address_success(client, admin_headers):
+    """DELETE /addresses/{id} returns 204 for admin."""
     p = client.post(
         "/persons/",
         json={"first_name": "P", "last_name": "P", "gender": "MALE"},
-        headers=auth_headers,
+        headers=admin_headers,
     )
     create = client.post(
         "/addresses/",
         json={"person_id": str(p.json()["id"]), "address_line": "123 Main"},
-        headers=auth_headers,
+        headers=admin_headers,
     )
     addr_id = create.json()["id"]
-    response = client.delete(f"/addresses/{addr_id}", headers=auth_headers)
+    response = client.delete(f"/addresses/{addr_id}", headers=admin_headers)
     assert response.status_code == 204

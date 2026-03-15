@@ -29,7 +29,8 @@ MAX_RECURSION_DEPTH = 10  # Prevent infinite loops
 def get_ancestors(
     db: Session, 
     person_id: UUID, 
-    max_depth: int = MAX_RECURSION_DEPTH
+    max_depth: int = MAX_RECURSION_DEPTH,
+    tree_id: UUID = None
 ) -> List[Dict[str, Any]]:
     """
     Get all ancestors of a person (parents, grandparents, etc.).
@@ -40,16 +41,22 @@ def get_ancestors(
         db: Database session
         person_id: UUID of the person
         max_depth: Maximum recursion depth
+        tree_id: Optional UUID of the tree (for access control)
         
     Returns:
         List of ancestor dictionaries with person info and generation level
         
     Raises:
-        ValueError: If person not found
+        ValueError: If person not found or not in user's tree
     """
-    person = person_repo.get_person_by_id(db, person_id)
-    if not person:
-        raise ValueError(f"Person with id {person_id} not found")
+    if tree_id:
+        person = person_repo.get_person_by_id_and_tree(db, person_id, tree_id)
+        if not person:
+            raise ValueError(f"Person with id {person_id} not found in your tree")
+    else:
+        person = person_repo.get_person_by_id(db, person_id)
+        if not person:
+            raise ValueError(f"Person with id {person_id} not found")
     
     ancestors = []
     visited = set()
@@ -84,7 +91,8 @@ def get_ancestors(
 def get_descendants(
     db: Session, 
     person_id: UUID, 
-    max_depth: int = MAX_RECURSION_DEPTH
+    max_depth: int = MAX_RECURSION_DEPTH,
+    tree_id: UUID = None
 ) -> List[Dict[str, Any]]:
     """
     Get all descendants of a person (children, grandchildren, etc.).
@@ -95,16 +103,22 @@ def get_descendants(
         db: Database session
         person_id: UUID of the person
         max_depth: Maximum recursion depth
+        tree_id: Optional UUID of the tree (for access control)
         
     Returns:
         List of descendant dictionaries with person info and generation level
         
     Raises:
-        ValueError: If person not found
+        ValueError: If person not found or not in user's tree
     """
-    person = person_repo.get_person_by_id(db, person_id)
-    if not person:
-        raise ValueError(f"Person with id {person_id} not found")
+    if tree_id:
+        person = person_repo.get_person_by_id_and_tree(db, person_id, tree_id)
+        if not person:
+            raise ValueError(f"Person with id {person_id} not found in your tree")
+    else:
+        person = person_repo.get_person_by_id(db, person_id)
+        if not person:
+            raise ValueError(f"Person with id {person_id} not found")
     
     descendants = []
     visited = set()
@@ -134,7 +148,7 @@ def get_descendants(
     return descendants
 
 
-def get_siblings(db: Session, person_id: UUID) -> List[Dict[str, Any]]:
+def get_siblings(db: Session, person_id: UUID, tree_id: UUID = None) -> List[Dict[str, Any]]:
     """
     Get all siblings of a person.
     
@@ -143,16 +157,22 @@ def get_siblings(db: Session, person_id: UUID) -> List[Dict[str, Any]]:
     Args:
         db: Database session
         person_id: UUID of the person
+        tree_id: Optional UUID of the tree (for access control)
         
     Returns:
         List of sibling dictionaries
         
     Raises:
-        ValueError: If person not found
+        ValueError: If person not found or not in user's tree
     """
-    person = person_repo.get_person_by_id(db, person_id)
-    if not person:
-        raise ValueError(f"Person with id {person_id} not found")
+    if tree_id:
+        person = person_repo.get_person_by_id_and_tree(db, person_id, tree_id)
+        if not person:
+            raise ValueError(f"Person with id {person_id} not found in your tree")
+    else:
+        person = person_repo.get_person_by_id(db, person_id)
+        if not person:
+            raise ValueError(f"Person with id {person_id} not found")
     
     siblings = []
     sibling_ids = set()
@@ -199,7 +219,8 @@ def get_siblings(db: Session, person_id: UUID) -> List[Dict[str, Any]]:
 def build_family_tree(
     db: Session, 
     root_person_id: UUID, 
-    depth: int = 3
+    depth: int = 3,
+    tree_id: UUID = None
 ) -> Dict[str, Any]:
     """
     Build a complete family tree structure starting from a person.
@@ -208,16 +229,22 @@ def build_family_tree(
         db: Database session
         root_person_id: UUID of the root person
         depth: How many generations to include
+        tree_id: Optional UUID of the tree (for access control)
         
     Returns:
         Dictionary representing the family tree structure
         
     Raises:
-        ValueError: If person not found
+        ValueError: If person not found or not in user's tree
     """
-    person = person_repo.get_person_by_id(db, root_person_id)
-    if not person:
-        raise ValueError(f"Person with id {root_person_id} not found")
+    if tree_id:
+        person = person_repo.get_person_by_id_and_tree(db, root_person_id, tree_id)
+        if not person:
+            raise ValueError(f"Person with id {root_person_id} not found in your tree")
+    else:
+        person = person_repo.get_person_by_id(db, root_person_id)
+        if not person:
+            raise ValueError(f"Person with id {root_person_id} not found")
     
     def _build_node(p_id: UUID, current_depth: int) -> Optional[Dict[str, Any]]:
         if current_depth > depth:
@@ -261,27 +288,33 @@ def build_family_tree(
     return _build_node(root_person_id, 1)
 
 
-def get_tree_statistics(db: Session, root_person_id: UUID) -> Dict[str, Any]:
+def get_tree_statistics(db: Session, root_person_id: UUID, tree_id: UUID = None) -> Dict[str, Any]:
     """
     Get statistics about a family tree.
     
     Args:
         db: Database session
         root_person_id: UUID of the root person
+        tree_id: Optional UUID of the tree (for access control)
         
     Returns:
         Dictionary with tree statistics
         
     Raises:
-        ValueError: If person not found
+        ValueError: If person not found or not in user's tree
     """
-    person = person_repo.get_person_by_id(db, root_person_id)
-    if not person:
-        raise ValueError(f"Person with id {root_person_id} not found")
+    if tree_id:
+        person = person_repo.get_person_by_id_and_tree(db, root_person_id, tree_id)
+        if not person:
+            raise ValueError(f"Person with id {root_person_id} not found in your tree")
+    else:
+        person = person_repo.get_person_by_id(db, root_person_id)
+        if not person:
+            raise ValueError(f"Person with id {root_person_id} not found")
     
-    ancestors = get_ancestors(db, root_person_id)
-    descendants = get_descendants(db, root_person_id)
-    siblings = get_siblings(db, root_person_id)
+    ancestors = get_ancestors(db, root_person_id, tree_id=tree_id)
+    descendants = get_descendants(db, root_person_id, tree_id=tree_id)
+    siblings = get_siblings(db, root_person_id, tree_id=tree_id)
     
     # Calculate max generation depth
     ancestor_generations = max([a["generation"] for a in ancestors], default=0)
