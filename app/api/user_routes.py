@@ -28,6 +28,7 @@ from app.repository.user_repo import (
     get_all_users_with_roles,
 )
 from app.repository.family_tree_repo import create_tree
+from app.repository.person_repo import create_person
 from app.models.user import User
 
 
@@ -126,10 +127,32 @@ def create_new_user(
         new_user.tree_id = new_tree.id
         db.commit()
         db.refresh(new_user)
+        
+        # Also create a Person (family member) for the FAMILY_ADMIN
+        person_data = {
+            "first_name": user_data.first_name,
+            "last_name": user_data.last_name,
+            "email": user_data.email,
+            "mobile": user_data.mobile if user_data.mobile else None,
+            "gender": "unknown",  # Can be updated later
+            "tree_id": new_tree.id,
+        }
+        create_person(db, person_data)
     else:
         # member/viewer - assign to current user's tree
         user_dict["tree_id"] = current_user.tree_id
         new_user = create_user(db, user_dict)
+        
+        # Also create a Person (family member) for this user
+        person_data = {
+            "first_name": user_data.first_name,
+            "last_name": user_data.last_name,
+            "email": user_data.email,
+            "mobile": user_data.mobile if user_data.mobile else None,
+            "gender": "unknown",  # Can be updated later by the user
+            "tree_id": current_user.tree_id,
+        }
+        create_person(db, person_data)
     
     return new_user
 
